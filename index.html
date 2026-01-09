@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Live Location Dashboard | Electric Wali</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --primary: #16a34a; /* Electric Green */
+            --bg: #f8fafc;
+            --black: #000000;
+            --radius: 16px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background: var(--bg); color: var(--black); }
+        .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+
+        /* Modern UI Components */
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: var(--radius);
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #e8f5e9;
+            color: var(--primary);
+            border-radius: 50px;
+            font-size: 12px;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 20px;
+        }
+
+        .pulse { animation: pulseAnim 1.5s infinite; }
+        @keyframes pulseAnim { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        #map { height: 400px; width: 100%; border-radius: var(--radius); border: 1px solid #ddd; margin: 20px 0; }
+
+        .btn {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .btn-start { background: var(--black); color: white; }
+        .btn-stop { background: #dc2626; color: white; }
+        .btn:hover { transform: scale(1.02); opacity: 0.9; }
+
+        .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 15px; }
+        .info-item { background: #fff; padding: 15px; border-radius: 12px; border: 1px solid #eee; }
+        .info-item label { display: block; font-size: 10px; color: #666; font-weight: 800; text-transform: uppercase; }
+        .info-item span { font-size: 14px; font-weight: 700; }
+
+        .share-box {
+            background: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px dashed var(--primary);
+            cursor: pointer;
+            word-break: break-all;
+            font-size: 13px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="setupView" class="dashboard-card" style="text-align: center;">
+        <i class="fas fa-location-dot" style="font-size: 40px; color: var(--primary); margin-bottom: 15px;"></i>
+        <h2>Live Tracker</h2>
+        <p style="color: #666; margin: 10px 0 25px;">Broadcast your location live via GitHub Pages</p>
+        <button class="btn btn-start" onclick="initTracking()"><i class="fas fa-play"></i> Start Live Session</button>
+    </div>
+
+    <div id="liveView" style="display: none;">
+        <div class="status-badge" id="statusText">
+            <i class="fas fa-circle pulse"></i> <span id="modeLabel">Live Broadcasting</span>
+        </div>
+
+        <div id="map"></div>
+
+        <div class="info-grid">
+            <div class="info-item"><label>Latitude</label><span id="lat">--</span></div>
+            <div class="info-item"><label>Longitude</label><span id="lng">--</span></div>
+            <div class="info-item"><label>Last Update</label><span id="time">--</span></div>
+            <div class="info-item"><label>Signal</label><span id="signal">Active</span></div>
+        </div>
+
+        <div id="shareArea" class="share-box" onclick="copyLink()">
+            <strong>Share Link:</strong> <span id="shareUrl">Generating...</span>
+        </div>
+
+        <button class="btn btn-stop" style="margin-top: 20px;" onclick="stopTracking()" id="stopBtn">
+            <i class="fas fa-square"></i> Stop Tracking
+        </button>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    // 1. YOUR FIREBASE CONFIG
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        authDomain: "YOUR_PROJECT.firebaseapp.com",
+        databaseURL: "https://YOUR_PROJECT.firebaseio.com",
+        projectId: "YOUR_PROJECT_ID",
+        storageBucket: "YOUR_PROJECT.appspot.com",
+        messagingSenderId: "YOUR_ID",
+        appId: "YOUR_APP_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    let map, marker, path = [], userId;
+    const urlParams = new URLSearchParams(window.location.search);
+    const trackMode = urlParams.get('track');
+
+    function initMap(lat, lng) {
+        map = L.map('map', { zoomControl: false }).setView([lat, lng], 15);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        marker = L.marker([lat, lng]).addTo(map);
+    }
+
+    // --- TRACKER MODE ---
+    async function initTracking() {
+        if (!navigator.geolocation) return alert("GPS not supported");
+        
+        userId = "user_" + Math.random().toString(36).substr(2, 9);
+        const link = window.location.href.split('?')[0] + "?track=" + userId;
+        document.getElementById('shareUrl').innerText = link;
+        
+        document.getElementById('setupView').style.display = 'none';
+        document.getElementById('liveView').style.display = 'block';
+
+        navigator.geolocation.watchPosition(pos => {
+            const { latitude, longitude } = pos.coords;
+            if (!map) initMap(latitude, longitude);
+            
+            const timestamp = Date.now();
+            db.ref('locations/' + userId).set({
+                lat: latitude,
+                lng: longitude,
+                lastUpdate: timestamp,
+                active: true
+            });
+
+            // Local Update
+            document.getElementById('lat').innerText = latitude.toFixed(5);
+            document.getElementById('lng').innerText = longitude.toFixed(5);
+            document.getElementById('time').innerText = new Date().toLocaleTimeString();
+            marker.setLatLng([latitude, longitude]);
+            map.panTo([latitude, longitude]);
+        }, err => console.error(err), { enableHighAccuracy: true });
+    }
+
+    // --- VIEWER MODE ---
+    if (trackMode) {
+        document.getElementById('setupView').style.display = 'none';
+        document.getElementById('liveView').style.display = 'block';
+        document.getElementById('modeLabel').innerText = "Viewing Live Stream";
+        document.getElementById('stopBtn').style.display = 'none';
+        document.getElementById('shareArea').style.display = 'none';
+
+        db.ref('locations/' + trackMode).on('value', snapshot => {
+            const data = snapshot.val();
+            if (data) {
+                if (!map) initMap(data.lat, data.lng);
+                marker.setLatLng([data.lat, data.lng]);
+                map.panTo([data.lat, data.lng]);
+                document.getElementById('lat').innerText = data.lat.toFixed(5);
+                document.getElementById('lng').innerText = data.lng.toFixed(5);
+                document.getElementById('time').innerText = new Date(data.lastUpdate).toLocaleTimeString();
+                
+                if (!data.active) {
+                    document.getElementById('statusText').style.background = "#fee2e2";
+                    document.getElementById('statusText').style.color = "#dc2626";
+                    document.getElementById('modeLabel').innerText = "Session Ended";
+                }
+            }
+        });
+    }
+
+    function stopTracking() {
+        if (userId) {
+            db.ref('locations/' + userId).update({ active: false });
+            location.reload();
+        }
+    }
+
+    function copyLink() {
+        navigator.clipboard.writeText(document.getElementById('shareUrl').innerText);
+        alert("Link Copied!");
+    }
+</script>
+</body>
+</html>
