@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -24,22 +25,10 @@
         </div>
 
         <div class="metrics-grid">
-            <div class="metric-card">
-                <h5>Speed</h5>
-                <p id="liveSpeed">0 <small>km/h</small></p>
-            </div>
-            <div class="metric-card">
-                <h5>Altitude</h5>
-                <p id="liveAlt">0 <small>m</small></p>
-            </div>
-            <div class="metric-card">
-                <h5>Accuracy</h5>
-                <p id="liveAcc">--</p>
-            </div>
-            <div class="metric-card">
-                <h5>Bearing</h5>
-                <p id="liveHeading">N/A</p>
-            </div>
+            <div class="metric-card"><h5>Speed</h5><p id="liveSpeed">0 <small>km/h</small></p></div>
+            <div class="metric-card"><h5>Altitude</h5><p id="liveAlt">0 <small>m</small></p></div>
+            <div class="metric-card"><h5>Accuracy</h5><p id="liveAcc">--</p></div>
+            <div class="metric-card"><h5>Bearing</h5><p id="liveHeading">N/A</p></div>
         </div>
 
         <button id="mainBtn" class="btn-main" onclick="initiateSystem()"><i class="fas fa-play"></i> INITIALIZE VISUAL RADAR</button>
@@ -48,13 +37,13 @@
             <div id="map"></div>
         </div>
 
-        <div class="section-title"><i class="fas fa-images" style="color:var(--primary)"></i> Visual Nearby Radar (1-10KM)</div>
+        <div class="section-title"><i class="fas fa-images" style="color:var(--primary)"></i> Visual Nearby Address (1-10KM)</div>
         <div class="address-grid" id="nearGrid">
             <div style="padding: 20px; color: #94a3b8; text-align: center; width: 100%;">Radar Sensors Offline. Start Trip.</div>
         </div>
 
         <div class="section-title"><i class="fas fa-list-ul" style="color:var(--dark)"></i> Live Journey Timeline</div>
-        <div id="movementLogContainer">
+        <div class="log-wrapper">
             <div id="movementLog">
                 <p style="text-align:center; color:#999; font-size: 12px;">Timeline starts when you move.</p>
             </div>
