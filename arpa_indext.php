@@ -5,7 +5,7 @@ define('DATA_DIR', __DIR__);
 define('HEARTBEAT_TIMEOUT', 30);
 
 if (!is_writable(DATA_DIR)) {
-    die('<div style="font-family:sans-serif;padding:20px;text-align:center;"><h1>⚠️ Configuration Error</h1><p>Directory not writable. Run: <code>chmod 755 ' . DATA_DIR . '</code></p></div>');
+    die('<h1>Configuration Error</h1><p>Directory not writable. Run: <code>chmod 755 ' . DATA_DIR . '</code></p>');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -121,568 +121,730 @@ $isViewer = !empty($trackUserId);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Live Location Dashboard</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>xsukax Live Location Tracker</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        :root {
-            --primary: #2da44e;
-            --primary-hover: #2c974b;
-            --danger: #d1242f;
-            --bg: #f6f8fa;
-            --card-bg: rgba(255, 255, 255, 0.8);
-            --accent: #0969da;
-            --radius: 12px;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; outline: none; }
-        
-        body { 
-            font-family: 'Inter', -apple-system, sans-serif; 
-            background: #f0f2f5;
-            color: #1a1f23;
-            overflow-x: hidden;
-        }
-
-        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
-
-        /* Animation Keyframes */
-        @keyframes pulseLive {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.2); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 1; }
-        }
-
-        @keyframes slideUp {
-            from { transform: translateY(20px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        /* Header UI */
-        .header { 
-            text-align: center; 
-            margin-bottom: 30px; 
-            animation: slideUp 0.5s ease-out;
-        }
-        .header h1 { font-size: 24px; font-weight: 800; color: #000; letter-spacing: -0.5px; }
-        .header p { color: #666; font-size: 14px; margin-top: 5px; }
-
-        /* Card System */
-        .card { 
-            background: var(--card-bg); 
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.3);
-            border-radius: var(--radius); 
-            padding: 24px; 
-            margin-bottom: 20px; 
-            box-shadow: 0 8px 32px rgba(0,0,0,0.05);
-            animation: slideUp 0.6s ease-out;
-        }
-
-        /* Buttons UI */
-        .btn-primary { 
-            background: var(--primary); color: white; border: none; padding: 14px 28px; 
-            font-size: 16px; font-weight: 600; border-radius: 10px; cursor: pointer; 
-            transition: 0.3s; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px;
-        }
-        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(45,164,78,0.3); }
-
-        .btn-secondary { 
-            background: #fff; color: #333; border: 1px solid #ddd; padding: 10px 20px; 
-            font-size: 14px; font-weight: 600; border-radius: 8px; cursor: pointer; transition: 0.2s;
-        }
-
-        .btn-danger { 
-            background: var(--danger); color: white; border: none; padding: 14px 28px; 
-            font-weight: 600; border-radius: 10px; cursor: pointer; transition: 0.3s;
-        }
-
-        /* Status Indicator */
-        .status-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 14px;
-            border-radius: 50px;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 15px;
-        }
-        .status-active { background: #e6ffec; color: #055d20; }
-        .status-active i { color: #2da44e; animation: pulseLive 1.5s infinite; }
-
-        /* Location Grid */
-        .location-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-top: 20px;
-        }
-        .grid-item {
-            background: rgba(0,0,0,0.03);
-            padding: 15px;
-            border-radius: 10px;
-            border: 1px solid rgba(0,0,0,0.02);
-        }
-        .grid-item label { display: block; font-size: 11px; text-transform: uppercase; color: #777; font-weight: 700; }
-        .grid-item span { font-size: 16px; font-weight: 700; color: #111; font-family: 'Monaco', monospace; }
-
-        /* Map UI */
-        #map { 
-            height: 450px; 
-            border-radius: var(--radius); 
-            border: 4px solid #fff;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-        .map-wrapper { position: relative; border-radius: var(--radius); overflow: hidden; }
-
-        /* Replay Controls */
-        .replay-bar {
-            margin: 20px 0;
-            background: #fff;
-            padding: 15px;
-            border-radius: 10px;
-        }
-        .progress-container {
-            height: 6px;
-            background: #eee;
-            border-radius: 10px;
-            cursor: pointer;
-            position: relative;
-            margin: 10px 0;
-        }
-        .progress-bar-fill {
-            height: 100%;
-            background: var(--accent);
-            border-radius: 10px;
-            width: 0%;
-            transition: width 0.1s linear;
-        }
-
-        /* Share Area */
-        .share-box {
-            background: #000;
-            color: #fff;
-            padding: 15px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-top: 15px;
-            cursor: pointer;
-        }
-        .share-box code { font-size: 12px; opacity: 0.8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-        /* Modal Design */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.4);
-            backdrop-filter: blur(4px);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-        }
-        .modal-card {
-            background: #fff;
-            padding: 30px;
-            border-radius: 20px;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.2);
-        }
-
-        @media (max-width: 600px) {
-            #map { height: 350px; }
-            .location-grid { grid-template-columns: 1fr; }
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif; background: #ffffff; color: #24292f; line-height: 1.5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+        .header { text-align: center; margin-bottom: 32px; padding: 24px; border-bottom: 1px solid #d0d7de; }
+        .header h1 { font-size: 32px; font-weight: 600; margin-bottom: 8px; color: #24292f; }
+        .header p { color: #57606a; font-size: 16px; }
+        .btn-primary { background: #2da44e; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background 0.2s; display: inline-block; text-decoration: none; margin: 4px; }
+        .btn-primary:hover { background: #2c974b; }
+        .btn-primary:disabled { background: #94d3a2; cursor: not-allowed; }
+        .btn-secondary { background: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; padding: 12px 24px; font-size: 16px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: inline-block; text-decoration: none; margin: 4px; }
+        .btn-secondary:hover { background: #f3f4f6; border-color: #c8cdd1; }
+        .btn-danger { background: #d1242f; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: 500; border-radius: 6px; cursor: pointer; transition: background 0.2s; display: inline-block; margin: 4px; }
+        .btn-danger:hover { background: #a40e26; }
+        .btn-small { padding: 6px 12px; font-size: 14px; }
+        .card { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: 24px; margin-bottom: 24px; }
+        .info-box { background: #ddf4ff; border: 1px solid #54aeff; border-radius: 6px; padding: 16px; margin-bottom: 24px; }
+        .info-box strong { color: #0969da; }
+        .warning-box { background: #fff8c5; border: 1px solid #d4a72c; border-radius: 6px; padding: 16px; margin-bottom: 24px; }
+        .map-container { position: relative; margin-bottom: 24px; }
+        #map { height: 500px; border-radius: 6px; border: 1px solid #d0d7de; box-shadow: 0 1px 3px rgba(0,0,0,0.12); }
+        .fullscreen-btn { position: absolute; top: 10px; right: 10px; z-index: 1000; background: #ffffff; border: 2px solid #d0d7de; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: all 0.2s; }
+        .fullscreen-btn:hover { background: #f6f8fa; transform: scale(1.05); }
+        .map-fullscreen { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 9999 !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; }
+        .map-fullscreen #map { height: 100vh !important; border-radius: 0 !important; }
+        .map-fullscreen .fullscreen-btn { top: 10px !important; right: 10px !important; }
+        .modal { display: none; position: fixed; z-index: 10000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .modal-content { background: #ffffff; margin: 15% auto; padding: 24px; border: 1px solid #d0d7de; border-radius: 6px; width: 90%; max-width: 500px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); }
+        .modal-header { font-size: 20px; font-weight: 600; margin-bottom: 16px; color: #24292f; }
+        .modal-body { margin-bottom: 16px; color: #57606a; }
+        .modal-footer { text-align: right; }
+        .status { padding: 8px 16px; border-radius: 6px; display: inline-block; font-size: 14px; font-weight: 500; margin-bottom: 16px; }
+        .status-active { background: #ddf4ff; color: #0969da; border: 1px solid #54aeff; }
+        .status-inactive { background: #f6f8fa; color: #57606a; border: 1px solid #d0d7de; }
+        .status-replay { background: #fff8c5; color: #9a6700; border: 1px solid #d4a72c; }
+        .share-url { background: #f6f8fa; border: 1px solid #d0d7de; padding: 12px; border-radius: 6px; font-family: 'Monaco', 'Courier New', monospace; font-size: 14px; word-break: break-all; margin: 16px 0; cursor: pointer; }
+        .share-url:hover { background: #f3f4f6; }
+        .location-info { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+        .location-info-item { background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; padding: 16px; }
+        .location-info-item label { display: block; font-size: 12px; color: #57606a; margin-bottom: 4px; text-transform: uppercase; font-weight: 600; }
+        .location-info-item value { display: block; font-size: 18px; font-weight: 600; color: #24292f; font-family: 'Monaco', 'Courier New', monospace; }
+        .replay-controls { background: #ffffff; border: 1px solid #d0d7de; border-radius: 6px; padding: 20px; margin-bottom: 24px; }
+        .replay-controls h3 { margin-bottom: 16px; font-size: 18px; font-weight: 600; }
+        .progress-bar { width: 100%; height: 8px; background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 4px; margin: 16px 0; position: relative; cursor: pointer; }
+        .progress-fill { height: 100%; background: #0969da; border-radius: 4px; transition: width 0.3s; }
+        .speed-controls { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+        .speed-label { font-size: 14px; color: #57606a; font-weight: 500; }
+        .btn-group { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+        @media (max-width: 768px) { .container { padding: 16px; } .header h1 { font-size: 24px; } #map { height: 400px; } .location-info { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="header">
+            <h1>📍 xsukax Live Location Tracker</h1>
+            <p>Share your real-time location securely with family and friends</p>
+        </div>
 
-<div class="container">
-    <header class="header">
-        <h1><i class="fa-solid fa-location-crosshairs" style="color:var(--primary)"></i> Live Tracker</h1>
-        <p>Real-time path visualization & sharing with Arpalink</p>
-    </header>
+        <?php if (!$isViewer): ?>
+            <div id="homepage">
+                <div class="card" style="text-align: center;">
+                    <h2 style="margin-bottom: 16px; font-size: 24px; font-weight: 600;">Track Your Location</h2>
+                    <p style="color: #57606a; margin-bottom: 24px;">Click the button below to start sharing your live location. A unique shareable link will be generated for you.</p>
+                    
+                    <div style="max-width: 400px; margin: 0 auto 24px;">
+                        <label for="initialUpdateInterval" style="display: block; font-size: 14px; color: #57606a; margin-bottom: 8px; font-weight: 500; text-align: left;">Update Interval (seconds)</label>
+                        <input type="number" id="initialUpdateInterval" min="1" max="60" value="5" style="width: 100%; padding: 8px 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; margin-bottom: 8px;">
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap; justify-content: center; margin-bottom: 8px;">
+                            <button class="btn-secondary btn-small" onclick="document.getElementById('initialUpdateInterval').value = 3; return false;">3s</button>
+                            <button class="btn-secondary btn-small" onclick="document.getElementById('initialUpdateInterval').value = 5; return false;">5s</button>
+                            <button class="btn-secondary btn-small" onclick="document.getElementById('initialUpdateInterval').value = 10; return false;">10s</button>
+                            <button class="btn-secondary btn-small" onclick="document.getElementById('initialUpdateInterval').value = 30; return false;">30s</button>
+                        </div>
+                        <p style="color: #57606a; font-size: 12px; margin-top: 4px; text-align: center;">Lower = more accurate, higher battery usage.</p>
+                    </div>
+                    
+                    <button id="startTracking" class="btn-primary">📍 Track My Location</button>
+                </div>
 
-    <?php if (!$isViewer): ?>
-        <div id="homepage">
-            <div class="card" style="text-align: center;">
-                <h2 style="margin-bottom: 10px;">Start New Session</h2>
-                <p style="margin-bottom: 25px; font-size: 14px;">Broadcasting your location securely via unique link with Arpalink</p>
+                <div class="info-box">
+                    <strong>How it works:</strong> When you start tracking, your browser will request location permission. Your location will be updated at your chosen interval and stored securely.
+                    <br><br>
+                    <strong>💡 Note:</strong> Your screen will stay on during tracking.
+                    <br><br>
+                    <strong>⚠️ Important:</strong> Keep this tab open! Tracking will automatically stop if you close the tab or refresh the page.
+                </div>
+            </div>
+
+            <div id="trackingView" style="display: none;">
+                <div class="status status-active" id="statusIndicator">🟢 Location Tracking Active</div>
                 
-                <div style="text-align: left; background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 20px;">
-                    <label style="font-size: 12px; font-weight: 800; color: #888;">UPDATE INTERVAL (SEC)</label>
-                    <input type="number" id="initialUpdateInterval" min="1" max="60" value="5" 
-                           style="width: 100%; border: none; font-size: 22px; font-weight: 800; margin-top: 5px;">
+                <div class="location-info">
+                    <div class="location-info-item">
+                        <label>Latitude</label>
+                        <value id="currentLat">--</value>
+                    </div>
+                    <div class="location-info-item">
+                        <label>Longitude</label>
+                        <value id="currentLng">--</value>
+                    </div>
+                    <div class="location-info-item">
+                        <label>Update Interval</label>
+                        <value id="currentIntervalDisplay">5s</value>
+                    </div>
+                    <div class="location-info-item">
+                        <label>Journey Duration</label>
+                        <value id="journeyDuration">--</value>
+                    </div>
+                    <div class="location-info-item">
+                        <label>Last Update</label>
+                        <value id="lastUpdate">--</value>
+                    </div>
                 </div>
 
-                <button id="startTracking" class="btn-primary">
-                    <i class="fa-solid fa-play"></i> START TRACKING
-                </button>
-            </div>
-        </div>
+                <div class="card">
+                    <h3 style="margin-bottom: 16px; font-weight: 600;">Share Your Location</h3>
+                    <p style="color: #57606a; margin-bottom: 16px;">Copy and share this URL:</p>
+                    <div class="share-url" id="shareUrl" onclick="copyShareUrl()">Generating...</div>
+                    <p style="color: #57606a; font-size: 14px;">Click the URL above to copy to clipboard</p>
+                </div>
 
-        <div id="trackingView" style="display: none;">
-            <div class="status-pill status-active" id="statusIndicator">
-                <i class="fa-solid fa-circle"></i> Live Now
-            </div>
+                <div class="warning-box">
+                    <strong>⚠️ Important:</strong> Tracking will automatically stop if you close this tab, refresh, or navigate away.
+                    <br><br>
+                    <strong>🎬 After Stopping:</strong> You and viewers can replay the complete journey.
+                </div>
 
-            <div class="map-wrapper">
-                <div id="map"></div>
-                <button onclick="toggleFullscreen()" style="position:absolute; top:15px; right:15px; z-index:1000; border:none; background:#fff; width:40px; height:40px; border-radius:8px; cursor:pointer; box-shadow:0 4px 10px rgba(0,0,0,0.1)">
-                    <i class="fa-solid fa-expand"></i>
-                </button>
-            </div>
+                <div class="card">
+                    <h3 style="margin-bottom: 16px; font-weight: 600;">Tracking Settings</h3>
+                    <div style="margin-bottom: 16px;">
+                        <label for="updateInterval" style="display: block; font-size: 14px; color: #57606a; margin-bottom: 8px; font-weight: 500;">Update Interval (seconds)</label>
+                        <input type="number" id="updateInterval" min="1" max="60" value="5" onkeypress="if(event.key==='Enter') updateTrackingInterval()" style="width: 100%; padding: 8px 12px; border: 1px solid #d0d7de; border-radius: 6px; font-size: 14px; margin-bottom: 8px;">
+                        <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px;">
+                            <button class="btn-secondary btn-small" onclick="setIntervalPreset(3)">3s - High Accuracy</button>
+                            <button class="btn-secondary btn-small" onclick="setIntervalPreset(5)">5s - Balanced</button>
+                            <button class="btn-secondary btn-small" onclick="setIntervalPreset(10)">10s - Battery Saver</button>
+                            <button class="btn-secondary btn-small" onclick="setIntervalPreset(30)">30s - Low Usage</button>
+                        </div>
+                        <p style="color: #57606a; font-size: 12px; margin-top: 4px;">Lower values = more accurate, higher battery usage (1-60 seconds).</p>
+                    </div>
+                    <button class="btn-primary btn-small" onclick="updateTrackingInterval()">✓ Apply Changes</button>
+                </div>
 
-            <div class="location-grid">
-                <div class="grid-item"><label>Latitude</label><span id="currentLat">--</span></div>
-                <div class="grid-item"><label>Longitude</label><span id="currentLng">--</span></div>
-                <div class="grid-item"><label>Duration</label><span id="journeyDuration">--</span></div>
-                <div class="grid-item"><label>Last Sync</label><span id="lastUpdate">--</span></div>
-            </div>
+                <div class="replay-controls" id="replayControls" style="display: none;">
+                    <h3>🎬 Journey Replay</h3>
+                    <div class="progress-bar" onclick="seekReplay(event)">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #57606a; margin-bottom: 16px;">
+                        <span id="replayCurrentTime">00:00</span>
+                        <span id="replayTotalTime">00:00</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-secondary btn-small" onclick="toggleReplay()">▶️ <span id="playPauseText">Play</span></button>
+                        <button class="btn-secondary btn-small" onclick="stopReplay()">⏹️ Stop</button>
+                        <button class="btn-secondary btn-small" onclick="restartReplay()">⏮️ Restart</button>
+                    </div>
+                    <div class="speed-controls">
+                        <span class="speed-label">Speed:</span>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(0.5)">0.5x</button>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(1)">1x</button>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(2)">2x</button>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(5)">5x</button>
+                    </div>
+                </div>
 
-            <div class="card" style="margin-top: 20px;">
-                <h3 style="font-size: 14px;">SHARE PRIVATE ACCESS</h3>
-                <div class="share-box" onclick="copyShareUrl()">
-                    <code id="shareUrl">Generating...</code>
-                    <i class="fa-solid fa-copy"></i>
+                <div class="map-container" id="mapContainer">
+                    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶</button>
+                    <div id="map"></div>
+                </div>
+
+                <div style="margin-top: 24px;" class="btn-group">
+                    <button id="showReplayBtn" class="btn-primary" onclick="showReplayMode()" style="display: none;">🎬 Replay Journey</button>
+                    <button id="stopTracking" class="btn-danger">⏹️ Stop Tracking</button>
                 </div>
             </div>
 
-            <div class="replay-bar" id="replayControls" style="display: none;">
-                <h3 style="font-size: 14px; margin-bottom: 10px;">REPLAY CONTROL</h3>
-                <div class="progress-container" onclick="seekReplay(event)">
-                    <div class="progress-bar-fill" id="progressFill"></div>
+        <?php else: ?>
+            <div id="viewerMode">
+                <div class="info-box">
+                    <strong>👁️ Viewing Mode:</strong> You are viewing live location.
+                    <br><br>
+                    <strong>🎬 Journey Replay:</strong> When tracking stops, you can replay the complete journey.
                 </div>
-                <div style="display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; margin-bottom: 15px;">
-                    <span id="replayCurrentTime">00:00</span>
-                    <span id="replayTotalTime">00:00</span>
+                
+                <div class="status status-active" id="viewerStatusIndicator">👁️ Viewing Live Location</div>
+                
+                <div class="location-info">
+                    <div class="location-info-item">
+                        <label>Latitude</label>
+                        <value id="viewerLat">Loading...</value>
+                    </div>
+                    <div class="location-info-item">
+                        <label>Longitude</label>
+                        <value id="viewerLng">Loading...</value>
+                    </div>
+                    <div class="location-info-item">
+                        <label>Journey Duration</label>
+                        <value id="viewerDuration">Loading...</value>
+                    </div>
+                    <div class="location-info-item">
+                        <label>Last Update</label>
+                        <value id="viewerLastUpdate">Loading...</value>
+                    </div>
                 </div>
-                <div style="display: flex; gap: 10px;">
-                    <button class="btn-secondary" onclick="toggleReplay()" id="playPauseText">Play</button>
-                    <button class="btn-secondary" onclick="restartReplay()">Restart</button>
+
+                <div class="replay-controls" id="viewerReplayControls" style="display: none;">
+                    <h3>🎬 Journey Replay</h3>
+                    <div class="progress-bar" onclick="seekReplay(event)">
+                        <div class="progress-fill" id="viewerProgressFill"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #57606a; margin-bottom: 16px;">
+                        <span id="viewerReplayCurrentTime">00:00</span>
+                        <span id="viewerReplayTotalTime">00:00</span>
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn-secondary btn-small" onclick="toggleReplay()">▶️ <span id="viewerPlayPauseText">Play</span></button>
+                        <button class="btn-secondary btn-small" onclick="stopReplay()">⏹️ Stop</button>
+                        <button class="btn-secondary btn-small" onclick="restartReplay()">⏮️ Restart</button>
+                    </div>
+                    <div class="speed-controls">
+                        <span class="speed-label">Speed:</span>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(0.5)">0.5x</button>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(1)">1x</button>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(2)">2x</button>
+                        <button class="btn-secondary btn-small" onclick="setReplaySpeed(5)">5x</button>
+                    </div>
+                </div>
+
+                <div class="map-container" id="viewerMapContainer">
+                    <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶</button>
+                    <div id="map"></div>
+                </div>
+
+                <div style="margin-top: 24px;" class="btn-group">
+                    <button class="btn-primary" onclick="showReplayMode()" id="viewerReplayBtn" style="display: none;">🎬 Replay Journey</button>
+                    <button class="btn-secondary" onclick="location.reload()">🔄 Refresh</button>
                 </div>
             </div>
-
-            <div style="margin-top: 20px; display: flex; gap: 10px;">
-                <button id="stopTrackingBtn" class="btn-danger" style="flex:1;">STOP TRACKING</button>
-                <button id="showReplayBtn" class="btn-primary" onclick="showReplayMode()" style="display: none; flex:1;">VIEW REPLAY</button>
-            </div>
-        </div>
-
-    <?php else: ?>
-        <div id="viewerMode">
-            <div class="status-pill status-active" id="viewerStatusIndicator">
-                <i class="fa-solid fa-circle"></i> Live Stream
-            </div>
-
-            <div class="map-wrapper">
-                <div id="map"></div>
-            </div>
-
-            <div class="location-grid">
-                <div class="grid-item"><label>Latitude</label><span id="viewerLat">--</span></div>
-                <div class="grid-item"><label>Longitude</label><span id="viewerLng">--</span></div>
-                <div class="grid-item"><label>Time Offset</label><span id="viewerDuration">--</span></div>
-                <div class="grid-item"><label>Signal</label><span id="viewerLastUpdate">--</span></div>
-            </div>
-
-            <div class="replay-bar" id="viewerReplayControls" style="display: none;">
-                <h3>🎬 Journey Replay</h3>
-                <div class="progress-container" onclick="seekReplay(event)">
-                    <div class="progress-bar-fill" id="viewerProgressFill"></div>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 15px;">
-                    <span id="viewerReplayCurrentTime">00:00</span>
-                    <span id="viewerReplayTotalTime">00:00</span>
-                </div>
-                <button class="btn-secondary" onclick="toggleReplay()" id="viewerPlayPauseText">Play</button>
-            </div>
-
-            <div style="margin-top: 20px;">
-                <button class="btn-primary" onclick="showReplayMode()" id="viewerReplayBtn" style="display: none;">LOAD COMPLETE JOURNEY</button>
-            </div>
-        </div>
-    <?php endif; ?>
-</div>
-
-<div id="modal" class="modal-overlay">
-    <div class="modal-card">
-        <div id="modalIcon" style="font-size: 40px; margin-bottom: 15px; color: var(--primary);">
-            <i class="fa-solid fa-circle-check"></i>
-        </div>
-        <h2 id="modalTitle" style="margin-bottom: 10px;">Success</h2>
-        <p id="modalBody" style="color: #666; font-size: 14px; margin-bottom: 25px;">Action completed successfully.</p>
-        <button class="btn-primary" onclick="closeModal()">OK</button>
+        <?php endif; ?>
     </div>
-</div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-    // Logic remains exactly as provided in the original code, only referencing new IDs for design.
-    let map, marker, routeLine, userId = null, trackingInterval = null, heartbeatInterval = null, viewingInterval = null, replayInterval = null;
-    let isReplayMode = false, replayPlaying = false, replaySpeed = 1, replayIndex = 0, replayData = null, startTime = null, wakeLock = null;
-    let currentUpdateInterval = 5000, isTracking = false, isFullscreen = false;
-    const isViewer = <?php echo $isViewer ? 'true' : 'false'; ?>;
-    const trackUserId = '<?php echo htmlspecialchars($trackUserId); ?>';
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header" id="modalTitle">Notice</div>
+            <div class="modal-body" id="modalBody">Modal content</div>
+            <div class="modal-footer">
+                <button class="btn-primary" onclick="closeModal()">OK</button>
+            </div>
+        </div>
+    </div>
 
-    async function requestWakeLock() {
-        try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } 
-        catch (err) { console.error('Wake Lock failed:', err); }
-    }
+    <script>
+        let map, marker, routeLine, userId = null, trackingInterval = null, heartbeatInterval = null, viewingInterval = null, replayInterval = null;
+        let isReplayMode = false, replayPlaying = false, replaySpeed = 1, replayIndex = 0, replayData = null, startTime = null, wakeLock = null;
+        let currentUpdateInterval = 5000, isTracking = false, isFullscreen = false;
+        const isViewer = <?php echo $isViewer ? 'true' : 'false'; ?>;
+        const trackUserId = '<?php echo htmlspecialchars($trackUserId); ?>';
 
-    function initMap(lat, lng) {
-        if (!map) {
-            map = L.map('map', { zoomControl: false }).setView([lat, lng], 15);
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                attribution: '&copy; OpenStreetMap &copy; CARTO'
-            }).addTo(map);
-            L.control.zoom({ position: 'bottomright' }).addTo(map);
-        } else {
-            map.setView([lat, lng], 15);
-        }
-    }
-
-    function updateMarker(lat, lng, label = 'Current Location') {
-        const icon = L.divIcon({
-            html: `<div style="background: var(--primary); width: 18px; height: 18px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(0,0,0,0.2);"></div>`,
-            iconSize: [18, 18],
-            className: ''
-        });
-        if (!marker) {
-            marker = L.marker([lat, lng], { icon: icon }).addTo(map);
-        } else {
-            marker.setLatLng([lat, lng]);
-            if (!isReplayMode) map.panTo([lat, lng]);
-        }
-    }
-
-    function drawRoute(points) {
-        if (routeLine) map.removeLayer(routeLine);
-        if (points && points.length > 1) {
-            const latLngs = points.map(p => [p.lat, p.lng]);
-            routeLine = L.polyline(latLngs, { color: '#0969da', weight: 4, opacity: 0.6, lineJoin: 'round' }).addTo(map);
-        }
-    }
-
-    function formatDuration(seconds) {
-        const h = Math.floor(seconds / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
-        return (h > 0 ? `${h}h ` : '') + `${m}m ${s}s`;
-    }
-
-    function formatTime(seconds) {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    }
-
-    function showModal(title, body, type = 'success') {
-        document.getElementById('modalTitle').textContent = title;
-        document.getElementById('modalBody').textContent = body;
-        document.getElementById('modalIcon').style.color = type === 'error' ? 'var(--danger)' : 'var(--primary)';
-        document.getElementById('modalIcon').innerHTML = type === 'error' ? '<i class="fa-solid fa-triangle-exclamation"></i>' : '<i class="fa-solid fa-circle-check"></i>';
-        document.getElementById('modal').style.display = 'flex';
-    }
-
-    function closeModal() { document.getElementById('modal').style.display = 'none'; }
-
-    function copyShareUrl() {
-        const url = document.getElementById('shareUrl').textContent;
-        navigator.clipboard.writeText(url).then(() => {
-            const el = document.getElementById('shareUrl');
-            const old = el.textContent;
-            el.textContent = "COPIED TO CLIPBOARD!";
-            setTimeout(() => el.textContent = old, 1500);
-        });
-    }
-
-    function toggleFullscreen() {
-        const el = document.getElementById('map');
-        if (!document.fullscreenElement) el.requestFullscreen();
-        else document.exitFullscreen();
-    }
-
-    // Tracking Logic Connect
-    if (!isViewer) {
-        document.getElementById('startTracking').addEventListener('click', function() {
-            navigator.geolocation.getCurrentPosition(pos => {
-                fetch('', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'action=init'
-                }).then(r => r.json()).then(data => {
-                    if (data.success) {
-                        userId = data.userId;
-                        startTime = Date.now();
-                        isTracking = true;
-                        document.getElementById('shareUrl').textContent = data.shareUrl;
-                        document.getElementById('homepage').style.display = 'none';
-                        document.getElementById('trackingView').style.display = 'block';
-                        requestWakeLock();
-                        initMap(pos.coords.latitude, pos.coords.longitude);
-                        updateMarker(pos.coords.latitude, pos.coords.longitude);
-                        
-                        const interval = parseInt(document.getElementById('initialUpdateInterval').value) || 5;
-                        currentUpdateInterval = interval * 1000;
-                        
-                        startLocationTracking();
-                        startHeartbeat();
-                    }
-                });
-            }, err => showModal("Permission Required", "Please enable GPS to start tracking.", "error"), {enableHighAccuracy: true});
-        });
-
-        document.getElementById('stopTrackingBtn').addEventListener('click', function() {
-            if(confirm("End live session?")) {
-                stopTrackingNow();
-                this.style.display = 'none';
-                document.getElementById('statusIndicator').className = 'status-pill status-inactive';
-                document.getElementById('statusIndicator').innerHTML = '<i class="fa-solid fa-circle-stop"></i> Session Ended';
-                document.getElementById('showReplayBtn').style.display = 'block';
-            }
-        });
-    }
-
-    function startLocationTracking() {
-        trackingInterval = setInterval(() => {
-            navigator.geolocation.getCurrentPosition(pos => {
-                const lat = pos.coords.latitude, lng = pos.coords.longitude;
-                document.getElementById('currentLat').textContent = lat.toFixed(5);
-                document.getElementById('currentLng').textContent = lng.toFixed(5);
-                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', second:'2-digit'});
-                document.getElementById('journeyDuration').textContent = formatDuration(Math.floor((Date.now() - startTime)/1000));
-                
-                updateMarker(lat, lng);
-                fetch('', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=update&userId=${userId}&lat=${lat}&lng=${lng}`
-                }).then(r => r.json()).then(res => {
-                    fetch('', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `action=get&userId=${userId}`
-                    }).then(r => r.json()).then(routeData => {
-                        if (routeData.success) drawRoute(routeData.data.points);
-                    });
-                });
-            }, null, {enableHighAccuracy: true});
-        }, currentUpdateInterval);
-    }
-
-    function startHeartbeat() {
-        heartbeatInterval = setInterval(() => {
-            if (userId && isTracking) {
-                fetch('', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=heartbeat&userId=${userId}`
-                });
-            }
-        }, 10000);
-    }
-
-    function stopTrackingNow() {
-        isTracking = false;
-        clearInterval(trackingInterval);
-        clearInterval(heartbeatInterval);
-        fetch('', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `action=stop&userId=${userId}`
-        });
-    }
-
-    // Replay System
-    function showReplayMode() {
-        isReplayMode = true;
-        const ctrls = isViewer ? 'viewerReplayControls' : 'replayControls';
-        document.getElementById(ctrls).style.display = 'block';
-        loadReplayData();
-    }
-
-    function loadReplayData() {
-        const tid = isViewer ? trackUserId : userId;
-        fetch('', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `action=get&userId=${tid}`
-        }).then(r => r.json()).then(data => {
-            if (data.success && data.data.points.length > 0) {
-                replayData = data.data.points;
-                const duration = replayData[replayData.length-1].timestamp - replayData[0].timestamp;
-                const durEl = isViewer ? 'viewerReplayTotalTime' : 'replayTotalTime';
-                document.getElementById(durEl).textContent = formatTime(duration);
-                drawRoute(replayData);
-                replayIndex = 0;
-            }
-        });
-    }
-
-    function toggleReplay() {
-        replayPlaying = !replayPlaying;
-        const btn = isViewer ? 'viewerPlayPauseText' : 'playPauseText';
-        document.getElementById(btn).textContent = replayPlaying ? "Pause" : "Play";
-        if (replayPlaying) {
-            replayInterval = setInterval(() => {
-                if (replayIndex < replayData.length) {
-                    const p = replayData[replayIndex];
-                    updateMarker(p.lat, p.lng);
-                    const pct = (replayIndex / (replayData.length - 1)) * 100;
-                    const fill = isViewer ? 'viewerProgressFill' : 'progressFill';
-                    document.getElementById(fill).style.width = pct + '%';
-                    replayIndex++;
-                } else {
-                    clearInterval(replayInterval);
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    wakeLock.addEventListener('release', () => console.log('Wake Lock released'));
                 }
-            }, 500);
-        } else {
-            clearInterval(replayInterval);
+            } catch (err) {
+                console.error('Wake Lock failed:', err);
+            }
         }
-    }
 
-    function restartReplay() {
-        replayIndex = 0;
-        const fill = isViewer ? 'viewerProgressFill' : 'progressFill';
-        document.getElementById(fill).style.width = '0%';
-        if(replayPlaying) toggleReplay();
-    }
+        async function releaseWakeLock() {
+            if (wakeLock !== null) {
+                try {
+                    await wakeLock.release();
+                    wakeLock = null;
+                } catch (err) {}
+            }
+        }
 
-    if (isViewer) {
-        function updateViewer() {
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                await requestWakeLock();
+            }
+        });
+
+        function initMap(lat, lng) {
+            if (!map) {
+                map = L.map('map').setView([lat, lng], 15);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap | <a href="https://github.com/xsukax/xsukax-Live-Location-Tracker" target="_blank">xsukax</a>',
+                    maxZoom: 19
+                }).addTo(map);
+            } else {
+                map.setView([lat, lng], 15);
+            }
+        }
+
+        function updateMarker(lat, lng, label = 'Current Location') {
+            if (!marker) {
+                const icon = L.divIcon({
+                    html: '<div style="background: #2da44e; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);"></div>',
+                    iconSize: [20, 20],
+                    className: ''
+                });
+                marker = L.marker([lat, lng], { icon: icon }).addTo(map);
+                marker.bindPopup(`<strong>${label}</strong>`).openPopup();
+            } else {
+                marker.setLatLng([lat, lng]);
+                marker.getPopup().setContent(`<strong>${label}</strong>`);
+                if (!isReplayMode) map.panTo([lat, lng]);
+            }
+        }
+
+        function drawRoute(points) {
+            if (routeLine) map.removeLayer(routeLine);
+            if (points && points.length > 1) {
+                const latLngs = points.map(p => [p.lat, p.lng]);
+                routeLine = L.polyline(latLngs, { color: '#0969da', weight: 3, opacity: 0.7 }).addTo(map);
+            }
+        }
+
+        function formatDuration(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+            if (hours > 0) return `${hours}h ${minutes}m ${secs}s`;
+            if (minutes > 0) return `${minutes}m ${secs}s`;
+            return `${secs}s`;
+        }
+
+        function formatTime(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        function toggleFullscreen() {
+            const container = isViewer ? document.getElementById('viewerMapContainer') : document.getElementById('mapContainer');
+            
+            if (!isFullscreen) {
+                container.classList.add('map-fullscreen');
+                document.body.style.overflow = 'hidden';
+                isFullscreen = true;
+            } else {
+                container.classList.remove('map-fullscreen');
+                document.body.style.overflow = '';
+                isFullscreen = false;
+            }
+            
+            setTimeout(() => { if (map) map.invalidateSize(); }, 100);
+        }
+
+        function showModal(title, body) {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').textContent = body;
+            document.getElementById('modal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        function copyShareUrl() {
+            const url = document.getElementById('shareUrl').textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                const original = document.getElementById('shareUrl').textContent;
+                document.getElementById('shareUrl').textContent = '✓ Copied!';
+                setTimeout(() => { document.getElementById('shareUrl').textContent = original; }, 2000);
+            });
+        }
+
+        function setIntervalPreset(seconds) {
+            document.getElementById('updateInterval').value = seconds;
+            updateTrackingInterval();
+        }
+
+        function updateTrackingInterval() {
+            const input = document.getElementById('updateInterval');
+            let seconds = parseInt(input.value);
+            if (isNaN(seconds) || seconds < 1) seconds = 1;
+            if (seconds > 60) seconds = 60;
+            input.value = seconds;
+            
+            currentUpdateInterval = seconds * 1000;
+            document.getElementById('currentIntervalDisplay').textContent = seconds + 's';
+            
+            if (trackingInterval && !isViewer) {
+                clearInterval(trackingInterval);
+                startLocationTracking();
+                showModal('Settings Updated', `Location updates every ${seconds} second${seconds !== 1 ? 's' : ''}.`);
+            } else {
+                showModal('Settings Saved', `Will update every ${seconds} second${seconds !== 1 ? 's' : ''}.`);
+            }
+        }
+
+        function showReplayMode() {
+            isReplayMode = true;
+            if (isViewer) {
+                document.getElementById('viewerStatusIndicator').className = 'status status-replay';
+                document.getElementById('viewerStatusIndicator').textContent = '🎬 Replay Mode';
+                document.getElementById('viewerReplayControls').style.display = 'block';
+                clearInterval(viewingInterval);
+            } else {
+                document.getElementById('statusIndicator').className = 'status status-replay';
+                document.getElementById('statusIndicator').textContent = '🎬 Replay Mode';
+                document.getElementById('replayControls').style.display = 'block';
+                document.getElementById('showReplayBtn').style.display = 'none';
+            }
+            loadReplayData();
+        }
+
+        function loadReplayData() {
+            const targetUserId = isViewer ? trackUserId : userId;
             fetch('', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `action=get&userId=${trackUserId}`
-            }).then(r => r.json()).then(data => {
-                if (data.success && data.data.current) {
-                    const c = data.data.current;
-                    if (!map) initMap(c.lat, c.lng);
-                    updateMarker(c.lat, c.lng);
-                    drawRoute(data.data.points);
-                    document.getElementById('viewerLat').textContent = c.lat.toFixed(5);
-                    document.getElementById('viewerLng').textContent = c.lng.toFixed(5);
-                    document.getElementById('viewerLastUpdate').textContent = 'Online';
-                    if (!data.data.isActive) {
-                        document.getElementById('viewerStatusIndicator').innerHTML = '<i class="fa-solid fa-circle-stop"></i> Ended';
-                        document.getElementById('viewerReplayBtn').style.display = 'block';
-                        clearInterval(viewingInterval);
-                    }
+                body: `action=get&userId=${targetUserId}`
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.data.points && data.data.points.length > 1) {
+                    replayData = data.data.points;
+                    replayIndex = 0;
+                    drawRoute(replayData);
+                    map.setView([replayData[0].lat, replayData[0].lng], 15);
+                    const totalDuration = replayData[replayData.length - 1].timestamp - replayData[0].timestamp;
+                    const timeElement = isViewer ? 'viewerReplayTotalTime' : 'replayTotalTime';
+                    document.getElementById(timeElement).textContent = formatTime(totalDuration);
+                    showModal('Replay Ready', `Journey has ${replayData.length} points spanning ${formatDuration(totalDuration)}.`);
+                } else {
+                    showModal('No Data', 'Not enough location data to replay.');
                 }
             });
         }
-        viewingInterval = setInterval(updateViewer, 5000);
-        updateViewer();
-    }
-</script>
 
+        function toggleReplay() {
+            if (!replayData || replayData.length < 2) return;
+            replayPlaying = !replayPlaying;
+            const textElement = isViewer ? 'viewerPlayPauseText' : 'playPauseText';
+            document.getElementById(textElement).textContent = replayPlaying ? 'Pause' : 'Play';
+            if (replayPlaying) {
+                playReplay();
+            } else {
+                clearInterval(replayInterval);
+            }
+        }
+
+        function playReplay() {
+            if (!replayData || replayIndex >= replayData.length) {
+                stopReplay();
+                return;
+            }
+            replayInterval = setInterval(() => {
+                if (replayIndex < replayData.length) {
+                    const point = replayData[replayIndex];
+                    updateMarker(point.lat, point.lng, `Point ${replayIndex + 1}`);
+                    const progress = (replayIndex / (replayData.length - 1)) * 100;
+                    const fillElement = isViewer ? 'viewerProgressFill' : 'progressFill';
+                    document.getElementById(fillElement).style.width = progress + '%';
+                    const currentTime = point.timestamp - replayData[0].timestamp;
+                    const timeElement = isViewer ? 'viewerReplayCurrentTime' : 'replayCurrentTime';
+                    document.getElementById(timeElement).textContent = formatTime(currentTime);
+                    replayIndex++;
+                } else {
+                    stopReplay();
+                    showModal('Replay Complete', 'Journey replay finished.');
+                }
+            }, 100 / replaySpeed);
+        }
+
+        function stopReplay() {
+            replayPlaying = false;
+            clearInterval(replayInterval);
+            const textElement = isViewer ? 'viewerPlayPauseText' : 'playPauseText';
+            document.getElementById(textElement).textContent = 'Play';
+        }
+
+        function restartReplay() {
+            stopReplay();
+            replayIndex = 0;
+            const fillElement = isViewer ? 'viewerProgressFill' : 'progressFill';
+            document.getElementById(fillElement).style.width = '0%';
+            const timeElement = isViewer ? 'viewerReplayCurrentTime' : 'replayCurrentTime';
+            document.getElementById(timeElement).textContent = '00:00';
+            if (replayData && replayData.length > 0) {
+                updateMarker(replayData[0].lat, replayData[0].lng, 'Start Point');
+            }
+        }
+
+        function setReplaySpeed(speed) {
+            replaySpeed = speed;
+            if (replayPlaying) {
+                stopReplay();
+                toggleReplay();
+            }
+        }
+
+        function seekReplay(event) {
+            if (!replayData || replayData.length < 2) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const percentage = x / rect.width;
+            replayIndex = Math.floor(percentage * (replayData.length - 1));
+            const point = replayData[replayIndex];
+            updateMarker(point.lat, point.lng, `Point ${replayIndex + 1}`);
+            const fillElement = isViewer ? 'viewerProgressFill' : 'progressFill';
+            document.getElementById(fillElement).style.width = (percentage * 100) + '%';
+            const currentTime = point.timestamp - replayData[0].timestamp;
+            const timeElement = isViewer ? 'viewerReplayCurrentTime' : 'replayCurrentTime';
+            document.getElementById(timeElement).textContent = formatTime(currentTime);
+        }
+
+        function stopTrackingNow() {
+            if (!userId) return;
+            isTracking = false;
+            clearInterval(trackingInterval);
+            clearInterval(heartbeatInterval);
+            trackingInterval = null;
+            heartbeatInterval = null;
+            
+            fetch('', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `action=stop&userId=${userId}`
+            }).catch(err => console.error('Stop failed:', err));
+            
+            const formData = new FormData();
+            formData.append('action', 'stop');
+            formData.append('userId', userId);
+            navigator.sendBeacon('', new URLSearchParams(formData));
+        }
+
+        if (!isViewer) {
+            document.getElementById('startTracking').addEventListener('click', function() {
+                if (!navigator.geolocation) {
+                    showModal('Error', 'Geolocation not supported.');
+                    return;
+                }
+
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        fetch('', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: 'action=init'
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                userId = data.userId;
+                                startTime = Date.now();
+                                isTracking = true;
+                                
+                                const intervalSeconds = parseInt(document.getElementById('initialUpdateInterval').value) || 5;
+                                currentUpdateInterval = intervalSeconds * 1000;
+                                document.getElementById('updateInterval').value = intervalSeconds;
+                                document.getElementById('currentIntervalDisplay').textContent = intervalSeconds + 's';
+                                document.getElementById('shareUrl').textContent = data.shareUrl;
+                                document.getElementById('homepage').style.display = 'none';
+                                document.getElementById('trackingView').style.display = 'block';
+                                
+                                requestWakeLock();
+                                initMap(position.coords.latitude, position.coords.longitude);
+                                updateMarker(position.coords.latitude, position.coords.longitude);
+                                startLocationTracking();
+                                startHeartbeat();
+                            }
+                        });
+                    },
+                    function(error) {
+                        let message = 'Unable to get location. ';
+                        if (error.code === 1) message += 'Permission denied.';
+                        else if (error.code === 2) message += 'Position unavailable.';
+                        else message += 'Timeout.';
+                        showModal('Location Error', message);
+                    },
+                    { enableHighAccuracy: true }
+                );
+            });
+
+            document.getElementById('stopTracking').addEventListener('click', function() {
+                if (confirm('Stop tracking? Viewers will be able to replay your journey.')) {
+                    stopTrackingNow();
+                    document.getElementById('stopTracking').style.display = 'none';
+                    document.getElementById('statusIndicator').className = 'status status-inactive';
+                    document.getElementById('statusIndicator').textContent = '⏹️ Tracking Stopped';
+                    document.getElementById('showReplayBtn').style.display = 'inline-block';
+                    releaseWakeLock();
+                    showModal('Tracking Stopped', 'Viewers can now replay your journey.');
+                }
+            });
+        }
+
+        function startHeartbeat() {
+            heartbeatInterval = setInterval(() => {
+                if (userId && isTracking) {
+                    fetch('', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `action=heartbeat&userId=${userId}`
+                    }).catch(err => console.error('Heartbeat failed:', err));
+                }
+            }, 10000);
+        }
+
+        function startLocationTracking() {
+            trackingInterval = setInterval(() => {
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        const lat = position.coords.latitude;
+                        const lng = position.coords.longitude;
+                        document.getElementById('currentLat').textContent = lat.toFixed(6);
+                        document.getElementById('currentLng').textContent = lng.toFixed(6);
+                        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+                        const duration = Math.floor((Date.now() - startTime) / 1000);
+                        document.getElementById('journeyDuration').textContent = formatDuration(duration);
+                        updateMarker(lat, lng);
+                        
+                        fetch('', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                            body: `action=update&userId=${userId}&lat=${lat}&lng=${lng}`
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                fetch('', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                    body: `action=get&userId=${userId}`
+                                })
+                                .then(r => r.json())
+                                .then(routeData => {
+                                    if (routeData.success && routeData.data.points) {
+                                        drawRoute(routeData.data.points);
+                                    }
+                                });
+                            }
+                        });
+                    },
+                    function(error) {
+                        console.error('Location error:', error);
+                    },
+                    { enableHighAccuracy: true, maximumAge: 0 }
+                );
+            }, currentUpdateInterval);
+        }
+
+        window.addEventListener('beforeunload', (e) => {
+            releaseWakeLock();
+            if (!isViewer && userId && isTracking) {
+                e.preventDefault();
+                e.returnValue = '';
+                stopTrackingNow();
+            }
+        });
+
+        if (isViewer) {
+            requestWakeLock();
+            
+            function updateViewerLocation() {
+                fetch('', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `action=get&userId=${trackUserId}`
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.data.current) {
+                        const current = data.data.current;
+                        const isActive = data.data.isActive !== false;
+                        
+                        if (!map) initMap(current.lat, current.lng);
+                        
+                        if (isActive) {
+                            document.getElementById('viewerStatusIndicator').className = 'status status-active';
+                            document.getElementById('viewerStatusIndicator').textContent = '👁️ Viewing Live Location';
+                            document.getElementById('viewerReplayBtn').style.display = 'none';
+                        } else {
+                            document.getElementById('viewerStatusIndicator').className = 'status status-inactive';
+                            document.getElementById('viewerStatusIndicator').textContent = '⏹️ Journey Completed';
+                            document.getElementById('viewerReplayBtn').style.display = 'inline-block';
+                            clearInterval(viewingInterval);
+                            releaseWakeLock();
+                            
+                            if (!isReplayMode) {
+                                const lastCheck = sessionStorage.getItem('lastCheck_' + trackUserId);
+                                if (lastCheck !== 'completed') {
+                                    sessionStorage.setItem('lastCheck_' + trackUserId, 'completed');
+                                    setTimeout(() => {
+                                        showModal('Journey Completed', 'Tracking ended. You can now replay the journey.');
+                                    }, 500);
+                                }
+                            }
+                        }
+                        
+                        updateMarker(current.lat, current.lng);
+                        if (data.data.points && data.data.points.length > 1) {
+                            drawRoute(data.data.points);
+                        }
+                        
+                        document.getElementById('viewerLat').textContent = current.lat.toFixed(6);
+                        document.getElementById('viewerLng').textContent = current.lng.toFixed(6);
+                        document.getElementById('viewerLastUpdate').textContent = new Date(current.timestamp * 1000).toLocaleTimeString();
+                        
+                        if (data.data.startTime) {
+                            const duration = current.timestamp - data.data.startTime;
+                            document.getElementById('viewerDuration').textContent = formatDuration(duration);
+                        }
+                    } else {
+                        showModal('No Data', 'No location data available yet.');
+                    }
+                })
+                .catch(err => console.error('Error:', err));
+            }
+            
+            updateViewerLocation();
+            viewingInterval = setInterval(updateViewerLocation, 5000);
+        }
+    </script>
 </body>
 </html>
